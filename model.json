@@ -1,0 +1,132 @@
+{
+    "lastMeditionB": {
+        "temperature": 25.5,
+        "humidity": 60,
+        "pressure": 1013,
+        "room": "B",
+        "status": "NORMAL",
+        "timestamp": "2024-06-01T12:00:00Z"
+    },
+    "lastMeditionA": {
+        "temperature": 22.0,
+        "humidity": 55,
+        "pressure": 1013,
+        "room": "A",
+        "status": "NORMAL",
+        "timestamp": "2024-06-01T12:00:00Z"
+    },
+    "meditions": [
+        {
+            "temperature": 22.0,
+            "humidity": 55,
+            "pressure": 1013,
+            "room": "A",
+            "status": "NORMAL",
+            "timestamp": "2024-06-01T12:00:00Z"
+        },
+        {
+            "temperature": 25.5,
+            "humidity": 60,
+            "pressure": 1013,
+            "room": "B",
+            "status": "NORMAL",
+            "timestamp": "2024-06-01T12:00:00Z"
+        },
+        {
+            "temperature": 23.0,
+            "humidity": 58,
+            "pressure": 1012,
+            "room": "A",
+            "status": "NORMAL",
+            "timestamp": "2024-06-01T12:05:00Z"
+        },
+        {
+            "temperature": 26.0,
+            "humidity": 62,
+            "pressure": 1012,
+            "room": "B",
+            "status": "NORMAL",
+            "timestamp": "2024-06-01T12:05:00Z"
+        },
+        {
+            "temperature": 24.0,
+            "humidity": 57,
+            "pressure": 1011,
+            "room": "A",
+            "status": "NORMAL",
+            "timestamp": "2024-06-01T12:10:00Z"
+        },
+        {
+            "temperature": 27.0,
+            "humidity": 63,
+            "pressure": 1011,
+            "room": "B",
+            "status": "HOT",
+            "timestamp": "2024-06-01T12:10:00Z"
+        },
+        {
+            "temperature": 23.5,
+            "humidity": 56,
+            "pressure": 1010,
+            "room": "A",
+            "status": "NORMAL",
+            "timestamp": "2024-06-01T12:15:00Z"
+        },
+        {
+            "temperature": 28.0,
+            "humidity": 65,
+            "pressure": 1010,
+            "room": "B",
+            "status": "HOT",
+            "timestamp": "2024-06-01T12:15:00Z"
+        },
+        {
+            "temperature": 22.5,
+            "humidity": 54,
+            "pressure": 1009,
+            "room": "A",
+            "status": "HOT",
+            "timestamp": "2024-06-01T12:20:00Z"
+        },
+        {
+            "temperature": 29.0,
+            "humidity": 66,
+            "pressure": 1009,
+            "room": "B",
+            "status": "COLD",
+            "timestamp": "2024-06-01T12:20:00Z"
+        },
+        {
+            "temperature": 21.0,
+            "humidity": 53,
+            "pressure": 1008,
+            "room": "A",
+            "status": "COLD",
+            "timestamp": "2024-06-01T12:25:00Z"
+        },
+        {
+            "temperature": 30.0,
+            "humidity": 67,
+            "pressure": 1008,
+            "room": "B",
+            "status": "COLD",
+            "timestamp": "2024-06-01T12:25:00Z"
+        },
+        {
+            "temperature": 20.0,
+            "humidity": 52,
+            "pressure": 1007,
+            "room": "A",
+            "status": "COLD",
+            "timestamp": "2024-06-01T12:30:00Z"
+        },
+        {
+            "temperature": 31.0,
+            "humidity": 68,
+            "pressure": 1007,
+            "room": "B",
+            "status": "COLD",
+            "timestamp": "2024-06-01T12:30:00Z"
+        }
+    ]
+}

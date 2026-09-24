@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Neas - Controle de Temperatura</title>
+
+    <!-- Fonte Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header class="header">
+        <div class="header-content">
+
+            <div class="brand">
+                <div class="logo-container">
+                    <img src="assets/logo.png" alt="Logo Neas">
+                </div>
+
+                <div class="brand-text">
+                    <h1>Neas</h1>
+                    <span>Controle de Temperatura</span>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <main>
+        <section class="last-medition">
+                <h2>Ultimas medições</h2>
+
+            <div class="cards">
+
+                <div class="room-a card">
+                    <h3>Sala A</h3>
+                    <p id="tempA">Temperatura: 0°C</p>
+                    <p id="humidityA">Umidade: 0%</p>
+                    <p id="pressureA">Pressão: 0 hPa</p>
+                    <p id="dateA">Data: ----</p>
+                    <p id="statusA">status: ----</p>
+                    <div class="status-indicator" id="statusIndicatorA" ></div>
+                </div>
+                <div class="room-b card">
+                    <h3>Sala B</h3>
+                    <p id="tempB">Temperatura: 0°C</p>
+                    <p id="humidityB">Umidade: 0%</p>
+                    <p id="pressureB">Pressão: 0 hPa</p>
+                    <p id="dateB">Data: ----</p>
+                    <p id="statusB">status: ----</p>
+                    <div class="status-indicator" id="statusIndicatorB" ></div>
+                </div>
+            </div>
+
+        </section>
+
+        <section class="history">
+            <h2>Histórico de Medições</h2>
+
+            <div class="period-selection">
+                <label for="period">Período:</label>
+                <select id="period" name="period">
+                    <option value="last-24-hours">Últimas 24 horas</option>
+                    <option value="last-7-days">Últimos 7 dias</option>
+                    <option value="last-30-days">Últimos 30 dias</option>
+                    <option value="all">Todo o histórico</option>
+                </select>
+            </div>
+            <div class="select-room">
+                <button class="active" id="btA">Sala A</button>
+                <button id="btB">Sala B</button>
+                <button id="btAll">Todos</button>
+            </div>
+            <div class="list-labels">
+                    <span>Data</span>
+                    <span>Temperatura</span>
+                    <span>Umidade</span>
+                    <span>Status</span>
+                </div> 
+            <div class="history-list" id="medition-list">
+                
+
+                <div>
+                    <p>Não há medições para exibir</p>
+                </div>
+
+            </div>
+
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
