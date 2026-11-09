@@ -72,10 +72,10 @@ let loadingTimers = [];
 
 const pad = (value) => String(value).padStart(2, '0');
 
-function formatDateUTC(value) {
+function formatDate(value) {
     const date = new Date(value);
 
-    return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()} - ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} - ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function statusLabel(status) {
@@ -255,7 +255,7 @@ function renderCard(room) {
     c.temp.textContent = `Temperatura: ${m.temperature}°C`;
     c.hum.textContent = `Umidade: ${m.humidity}%`;
     c.pressure.textContent = `Pressão: ${m.pressure} hPa`;
-    c.date.textContent = `Data: ${formatDateUTC(m.time)}`;
+    c.date.textContent = `Data: ${formatDate(m.time)}`;
     c.status.textContent = `Status: ${statusLabel(m.status)}`;
     c.indicator.style.backgroundColor = `var(--status-${m.status})`;
 }
@@ -269,7 +269,7 @@ function createListItem(m) {
 
     return `
         <div class="list-item">
-            <span>${formatDateUTC(m.time)}${roomInfo}</span>
+            <span>${formatDate(m.time)}${roomInfo}</span>
             <span>${m.temperature}°C</span>
             <span>${m.humidity}%</span>
             <span style="color: var(--status-${m.status});">${statusLabel(m.status)}</span>
@@ -374,8 +374,8 @@ function formatTick(t, span) {
     const d = new Date(t);
 
     return span <= 36 * 60 * 60 * 1000
-        ? `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
-        : `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`;
+        ? `${pad(d.getHours())}:${pad(d.getMinutes())}`
+        : `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 }
 
 function renderChart(rows) {
@@ -505,7 +505,7 @@ function renderChart(rows) {
         });
 
         tooltip.innerHTML =
-            `<strong>${formatDateUTC(best.p.t)}</strong>` +
+            `<strong>${formatDate(best.p.t)}</strong>` +
             found.map(f => `<br>Sala ${f.room}: ${f.p.v.toFixed(1)}°C`).join('');
         tooltip.style.display = 'block';
 
