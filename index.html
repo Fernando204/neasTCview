@@ -36,27 +36,27 @@
 
     <main>
         <section class="last-medition">
-                <h2>Ultimas medições</h2>
+            <h2>Ultimas medições</h2>
 
             <div class="cards">
 
-                <div class="room-a card">
+                <div class="room-a card loading" id="cardA">
                     <h3>Sala A</h3>
-                    <p id="tempA">Temperatura: 0°C</p>
-                    <p id="humidityA">Umidade: 0%</p>
-                    <p id="pressureA">Pressão: 0 hPa</p>
-                    <p id="dateA">Data: ----</p>
-                    <p id="statusA">status: ----</p>
-                    <div class="status-indicator" id="statusIndicatorA" ></div>
+                    <p id="tempA">Temperatura: carregando...</p>
+                    <p id="humidityA">Umidade: carregando...</p>
+                    <p id="pressureA">Pressão: carregando...</p>
+                    <p id="dateA">Data: carregando...</p>
+                    <p id="statusA">Status: carregando...</p>
+                    <div class="status-indicator" id="statusIndicatorA"></div>
                 </div>
-                <div class="room-b card">
+                <div class="room-b card loading" id="cardB">
                     <h3>Sala B</h3>
-                    <p id="tempB">Temperatura: 0°C</p>
-                    <p id="humidityB">Umidade: 0%</p>
-                    <p id="pressureB">Pressão: 0 hPa</p>
-                    <p id="dateB">Data: ----</p>
-                    <p id="statusB">status: ----</p>
-                    <div class="status-indicator" id="statusIndicatorB" ></div>
+                    <p id="tempB">Temperatura: carregando...</p>
+                    <p id="humidityB">Umidade: carregando...</p>
+                    <p id="pressureB">Pressão: carregando...</p>
+                    <p id="dateB">Data: carregando...</p>
+                    <p id="statusB">Status: carregando...</p>
+                    <div class="status-indicator" id="statusIndicatorB"></div>
                 </div>
             </div>
 
@@ -75,23 +75,29 @@
                 </select>
             </div>
             <div class="select-room">
-                <button class="active" id="btA">Sala A</button>
-                <button id="btB">Sala B</button>
-                <button id="btAll">Todos</button>
+                <button class="active" id="btA" data-room="A" aria-pressed="true">Sala A</button>
+                <button id="btB" data-room="B" aria-pressed="false">Sala B</button>
+                <button id="btAll" data-room="All" aria-pressed="false">Todos</button>
             </div>
-            <div class="list-labels">
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 id="chart-title">Temperatura</h3>
+                    <div class="chart-legend" id="chart-legend"></div>
+                </div>
+                <div class="chart" id="chart"></div>
+            </div>
+
+            <div class="history-table">
+                <p class="list-info" id="list-info"></p>
+                <div class="list-labels">
                     <span>Data</span>
                     <span>Temperatura</span>
                     <span>Umidade</span>
                     <span>Status</span>
-                </div> 
-            <div class="history-list" id="medition-list">
-                
-
-                <div>
-                    <p>Não há medições para exibir</p>
                 </div>
-
+                <div class="history-list" id="medition-list">
+                </div>
             </div>
 
         </section>
