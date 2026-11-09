@@ -11,7 +11,14 @@ const PERIODS_MS = {
     'all': Infinity
 };
 
-const ROOM_COLORS = { A: '#2e9e44', B: '#34495e' };
+// Salas e sensores (Sala A: sensores 1 e 2; Sala B: sensor 1)
+const ROOMS = {
+    A: { name: 'Sala A', sensors: [1, 2] },
+    B: { name: 'Sala B', sensors: [1] }
+};
+
+const SERIES_COLORS = { 'A-1': '#2e9e44', 'A-2': '#34495e', 'B-1': '#b5651d' };
+const UNKNOWN_COLOR = '#888888';
 
 const STATUS_LABELS = { normal: 'Normal', hot: 'Quente', cold: 'Frio' };
 
@@ -28,26 +35,39 @@ const chartEl = document.getElementById('chart');
 const chartTitle = document.getElementById('chart-title');
 const chartLegend = document.getElementById('chart-legend');
 
-const cards = {
-    A: {
-        card: document.getElementById('cardA'),
-        temp: document.getElementById('tempA'),
-        hum: document.getElementById('humidityA'),
-        pressure: document.getElementById('pressureA'),
-        date: document.getElementById('dateA'),
-        status: document.getElementById('statusA'),
-        indicator: document.getElementById('statusIndicatorA')
-    },
-    B: {
-        card: document.getElementById('cardB'),
-        temp: document.getElementById('tempB'),
-        hum: document.getElementById('humidityB'),
-        pressure: document.getElementById('pressureB'),
-        date: document.getElementById('dateB'),
-        status: document.getElementById('statusB'),
-        indicator: document.getElementById('statusIndicatorB')
-    }
-};
+const selectSensor = document.getElementById('select-sensor');
+const cardsContainer = document.querySelector('.cards');
+
+// Um card por sensor: chaves "A-1", "A-2", "B-1"
+const cards = {};
+
+Object.entries(ROOMS).forEach(([room, info]) => {
+    info.sensors.forEach(sensor => {
+        const el = document.createElement('div');
+        el.className = `room-${room.toLowerCase()} card loading`;
+        el.innerHTML = `
+            <h3>${info.name} · Sensor ${sensor}</h3>
+            <p data-field="temp"></p>
+            <p data-field="hum"></p>
+            <p data-field="pressure"></p>
+            <p data-field="date"></p>
+            <p data-field="status"></p>
+            <div class="status-indicator" data-field="indicator"></div>
+        `;
+        cardsContainer.appendChild(el);
+
+        const field = (name) => el.querySelector(`[data-field="${name}"]`);
+        cards[`${room}-${sensor}`] = {
+            card: el,
+            temp: field('temp'),
+            hum: field('hum'),
+            pressure: field('pressure'),
+            date: field('date'),
+            status: field('status'),
+            indicator: field('indicator')
+        };
+    });
+});
 
 /* =========================
    ESTADO
@@ -56,8 +76,9 @@ const cards = {
 const state = {
     status: 'loading',            // 'loading' | 'ready' | 'error'
     meditions: [],                // sempre ordenadas do mais novo para o mais antigo
-    last: { A: null, B: null },
+    last: {},                     // última medição de cada sensor ("A-1", "A-2", "B-1")
     room: 'A',
+    sensor: 'all',                // 'all' ou número do sensor
     period: periodSelect.value,   // começa igual ao que o select mostra
     visible: PAGE_SIZE
 };
@@ -87,6 +108,7 @@ function normalize(m) {
     return {
         ...m,
         time: new Date(m.createdAt ?? m.timestamp).getTime(),
+        sensor: m.sensor == null ? null : Number(m.sensor),
         status: String(m.status || '').toLowerCase()
     };
 }
@@ -165,12 +187,12 @@ async function loadData({ silent = false } = {}) {
             .filter(m => Number.isFinite(m.time))
             .sort((a, b) => b.time - a.time);
 
-        state.last.A = data.lastMeditionA
-            ? normalize(data.lastMeditionA)
-            : state.meditions.find(m => m.room === 'A') || null;
-        state.last.B = data.lastMeditionB
-            ? normalize(data.lastMeditionB)
-            : state.meditions.find(m => m.room === 'B') || null;
+        // Como a lista está do mais novo para o mais antigo, a primeira de cada sensor é a última
+        state.last = {};
+        state.meditions.forEach(m => {
+            const key = `${m.room}-${m.sensor}`;
+            if (!state.last[key]) state.last[key] = m;
+        });
 
         state.status = 'ready';
     } catch (error) {
@@ -196,7 +218,9 @@ function getFiltered() {
     const since = Number.isFinite(span) ? Date.now() - span : -Infinity;
 
     return state.meditions.filter(m =>
-        m.time >= since && (state.room === 'All' || m.room === state.room)
+        m.time >= since &&
+        (state.room === 'All' || m.room === state.room) &&
+        (state.sensor === 'all' || m.sensor === state.sensor)
     );
 }
 
@@ -209,6 +233,7 @@ periodSelect.addEventListener('change', () => {
 roomButtons.forEach(button => {
     button.addEventListener('click', () => {
         state.room = button.dataset.room;
+        state.sensor = 'all';
         state.visible = PAGE_SIZE;
 
         roomButtons.forEach(b => {
@@ -221,12 +246,38 @@ roomButtons.forEach(button => {
     });
 });
 
+function renderSensorFilter() {
+    const sensors = ROOMS[state.room]?.sensors || [];
+
+    // Só aparece quando a sala tem mais de um sensor (Sala A)
+    if (sensors.length < 2) {
+        selectSensor.innerHTML = '';
+        return;
+    }
+
+    const options = [['all', 'Todos os sensores'], ...sensors.map(s => [s, `Sensor ${s}`])];
+
+    selectSensor.innerHTML = options.map(([value, label]) => {
+        const active = String(state.sensor) === String(value);
+        return `<button type="button" data-sensor="${value}" class="${active ? 'active' : ''}" aria-pressed="${active}">${label}</button>`;
+    }).join('');
+}
+
+selectSensor.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-sensor]');
+    if (!button) return;
+
+    state.sensor = button.dataset.sensor === 'all' ? 'all' : Number(button.dataset.sensor);
+    state.visible = PAGE_SIZE;
+    render();
+});
+
 /* =========================
    CARDS (ÚLTIMAS MEDIÇÕES)
 ========================= */
 
-function setCardPlaceholder(room, text, pulsing) {
-    const c = cards[room];
+function setCardPlaceholder(key, text, pulsing) {
+    const c = cards[key];
 
     c.card.classList.toggle('loading', pulsing);
     c.temp.textContent = `Temperatura: ${text}`;
@@ -237,17 +288,17 @@ function setCardPlaceholder(room, text, pulsing) {
     c.indicator.style.backgroundColor = 'transparent';
 }
 
-function renderCard(room) {
-    const c = cards[room];
-    const m = state.last[room];
+function renderCard(key) {
+    const c = cards[key];
+    const m = state.last[key];
 
     if (state.status === 'loading') {
-        setCardPlaceholder(room, 'carregando...', true);
+        setCardPlaceholder(key, 'carregando...', true);
         return;
     }
 
     if (!m) {
-        setCardPlaceholder(room, state.status === 'error' ? 'indisponível' : '----', false);
+        setCardPlaceholder(key, state.status === 'error' ? 'indisponível' : '----', false);
         return;
     }
 
@@ -265,11 +316,13 @@ function renderCard(room) {
 ========================= */
 
 function createListItem(m) {
-    const roomInfo = state.room === 'All' ? ` · Sala ${m.room}` : '';
+    const sensorText = m.sensor == null ? '—' : `Sensor ${m.sensor}`;
+    const where = state.room === 'All' ? `Sala ${m.room} · ${sensorText}` : sensorText;
 
     return `
         <div class="list-item">
-            <span>${formatDate(m.time)}${roomInfo}</span>
+            <span>${formatDate(m.time)}</span>
+            <span>${where}</span>
             <span>${m.temperature}°C</span>
             <span>${m.humidity}%</span>
             <span style="color: var(--status-${m.status});">${statusLabel(m.status)}</span>
@@ -332,20 +385,33 @@ function downsample(points, max) {
     return out;
 }
 
+function seriesLabel(room, sensor) {
+    return `Sala ${room}` + (sensor == null ? '' : ` · Sensor ${sensor}`);
+}
+
+// Uma linha por sensor
 function buildSeries(rows) {
-    const rooms = state.room === 'All' ? ['A', 'B'] : [state.room];
+    const groups = new Map();
 
-    return rooms
-        .map(room => {
-            const points = rows
-                .filter(m => m.room === room)
-                .map(m => ({ t: m.time, v: Number(m.temperature) }))
-                .filter(p => Number.isFinite(p.v))
-                .sort((a, b) => a.t - b.t);
+    rows.forEach(m => {
+        const v = Number(m.temperature);
+        if (!Number.isFinite(v)) return;
 
-            return { room, points: downsample(points, CHART_MAX_POINTS) };
-        })
-        .filter(s => s.points.length > 0);
+        const key = `${m.room}-${m.sensor ?? '?'}`;
+        if (!groups.has(key)) {
+            groups.set(key, { key, room: m.room, sensor: m.sensor, points: [] });
+        }
+        groups.get(key).points.push({ t: m.time, v });
+    });
+
+    return [...groups.values()]
+        .sort((x, y) => x.key.localeCompare(y.key))
+        .map(s => ({
+            ...s,
+            label: seriesLabel(s.room, s.sensor),
+            color: SERIES_COLORS[s.key] || UNKNOWN_COLOR,
+            points: downsample(s.points.sort((p, q) => p.t - q.t), CHART_MAX_POINTS)
+        }));
 }
 
 function niceTicks(min, max, count = 5) {
@@ -382,7 +448,9 @@ function renderChart(rows) {
     const periodText = periodSelect.options[periodSelect.selectedIndex].text;
     const roomText = state.room === 'All' ? 'Todas as salas' : `Sala ${state.room}`;
 
-    chartTitle.textContent = `Temperatura · ${roomText} · ${periodText}`;
+    const sensorText = state.sensor === 'all' ? '' : ` · Sensor ${state.sensor}`;
+
+    chartTitle.textContent = `Temperatura · ${roomText}${sensorText} · ${periodText}`;
     chartLegend.innerHTML = '';
 
     if (state.status === 'loading') {
@@ -404,7 +472,7 @@ function renderChart(rows) {
 
     if (series.length > 1) {
         chartLegend.innerHTML = series
-            .map(s => `<span style="--c:${ROOM_COLORS[s.room]}">Sala ${s.room}</span>`)
+            .map(s => `<span style="--c:${s.color}">${s.label}</span>`)
             .join('');
     }
 
@@ -448,20 +516,20 @@ function renderChart(rows) {
     // linhas retas, sem suavização
     series.forEach(s => {
         const pts = s.points.map(p => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
-        svg += `<polyline points="${pts}" fill="none" stroke="${ROOM_COLORS[s.room]}" stroke-width="1.5" stroke-linejoin="round"/>`;
+        svg += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="1.5" stroke-linejoin="round"/>`;
 
         // poucos pontos: mostra cada medição
         if (s.points.length <= 60) {
             s.points.forEach(p => {
-                svg += `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.5" fill="${ROOM_COLORS[s.room]}"/>`;
+                svg += `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.5" fill="${s.color}"/>`;
             });
         }
     });
 
     // elementos usados ao passar o mouse
     svg += `<line id="chart-guide" y1="${m.t}" y2="${H - m.b}" class="guide" visibility="hidden"/>`;
-    series.forEach(s => {
-        svg += `<circle id="chart-dot-${s.room}" r="4" fill="#fff" stroke="${ROOM_COLORS[s.room]}" stroke-width="1.5" visibility="hidden"/>`;
+    series.forEach((s, i) => {
+        svg += `<circle id="chart-dot-${i}" r="4" fill="#fff" stroke="${s.color}" stroke-width="1.5" visibility="hidden"/>`;
     });
     svg += '</svg><div class="chart-tooltip" id="chart-tooltip"></div>';
 
@@ -478,7 +546,7 @@ function renderChart(rows) {
     const hide = () => {
         tooltip.style.display = 'none';
         guide.setAttribute('visibility', 'hidden');
-        series.forEach(s => document.getElementById(`chart-dot-${s.room}`).setAttribute('visibility', 'hidden'));
+        series.forEach((s, i) => document.getElementById(`chart-dot-${i}`).setAttribute('visibility', 'hidden'));
     };
 
     svgEl.addEventListener('pointermove', (e) => {
@@ -490,15 +558,15 @@ function renderChart(rows) {
         }
 
         const t = t0 + ((px - m.l) / plotW) * span;
-        const found = series.map(s => ({ room: s.room, p: nearest(s.points, t) }));
+        const found = series.map(s => ({ s, p: nearest(s.points, t) }));
         const best = found.reduce((a, b) => (Math.abs(a.p.t - t) < Math.abs(b.p.t - t) ? a : b));
 
         guide.setAttribute('x1', x(best.p.t));
         guide.setAttribute('x2', x(best.p.t));
         guide.setAttribute('visibility', 'visible');
 
-        found.forEach(f => {
-            const dot = document.getElementById(`chart-dot-${f.room}`);
+        found.forEach((f, i) => {
+            const dot = document.getElementById(`chart-dot-${i}`);
             dot.setAttribute('cx', x(f.p.t));
             dot.setAttribute('cy', y(f.p.v));
             dot.setAttribute('visibility', 'visible');
@@ -506,7 +574,7 @@ function renderChart(rows) {
 
         tooltip.innerHTML =
             `<strong>${formatDate(best.p.t)}</strong>` +
-            found.map(f => `<br>Sala ${f.room}: ${f.p.v.toFixed(1)}°C`).join('');
+            found.map(f => `<br>${f.s.label}: ${f.p.v.toFixed(1)}°C`).join('');
         tooltip.style.display = 'block';
 
         const left = x(best.p.t) + 10;
@@ -532,8 +600,8 @@ window.addEventListener('resize', () => {
 function render() {
     const rows = state.status === 'ready' ? getFiltered() : [];
 
-    renderCard('A');
-    renderCard('B');
+    renderSensorFilter();
+    Object.keys(cards).forEach(renderCard);
     renderChart(rows);
     renderList(rows);
 }

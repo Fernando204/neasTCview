@@ -273,7 +273,7 @@ button:hover {
 .list-labels,
 .history-list .list-item {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1.5fr;
+    grid-template-columns: 1.6fr 1.6fr 1fr 1fr 1.3fr;
     align-items: center;
     column-gap: 20px;
 }
@@ -314,12 +314,14 @@ button:hover {
     font-weight: 500;
 }
 
-.select-room {
+.select-room,
+.select-sensor {
     display: flex;
     align-items: center;
     gap: 12px;
 }
-.select-room button {
+.select-room button,
+.select-sensor button {
     padding: 6px 10px;
 
     background: #ffffff;
@@ -331,7 +333,8 @@ button:hover {
 
     cursor: pointer;
 }
-.select-room button.active {
+.select-room button.active,
+.select-sensor button.active {
     background: var(--primary-color);
     color: var(--secondary-color);
     border-color: var(--primary-color);
@@ -424,6 +427,10 @@ button:hover {
     font-size: 0.95rem;
     font-weight: 500;
 }
+.select-sensor:empty {
+    display: none;
+}
+
 .chart-legend {
     display: flex;
     gap: 14px;

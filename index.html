@@ -38,27 +38,7 @@
         <section class="last-medition">
             <h2>Ultimas medições</h2>
 
-            <div class="cards">
-
-                <div class="room-a card loading" id="cardA">
-                    <h3>Sala A</h3>
-                    <p id="tempA">Temperatura: carregando...</p>
-                    <p id="humidityA">Umidade: carregando...</p>
-                    <p id="pressureA">Pressão: carregando...</p>
-                    <p id="dateA">Data: carregando...</p>
-                    <p id="statusA">Status: carregando...</p>
-                    <div class="status-indicator" id="statusIndicatorA"></div>
-                </div>
-                <div class="room-b card loading" id="cardB">
-                    <h3>Sala B</h3>
-                    <p id="tempB">Temperatura: carregando...</p>
-                    <p id="humidityB">Umidade: carregando...</p>
-                    <p id="pressureB">Pressão: carregando...</p>
-                    <p id="dateB">Data: carregando...</p>
-                    <p id="statusB">Status: carregando...</p>
-                    <div class="status-indicator" id="statusIndicatorB"></div>
-                </div>
-            </div>
+            <div class="cards"></div>
 
         </section>
 
@@ -79,6 +59,7 @@
                 <button id="btB" data-room="B" aria-pressed="false">Sala B</button>
                 <button id="btAll" data-room="All" aria-pressed="false">Todos</button>
             </div>
+            <div class="select-sensor" id="select-sensor"></div>
 
             <div class="chart-card">
                 <div class="chart-header">
@@ -92,6 +73,7 @@
                 <p class="list-info" id="list-info"></p>
                 <div class="list-labels">
                     <span>Data</span>
+                    <span>Sensor</span>
                     <span>Temperatura</span>
                     <span>Umidade</span>
                     <span>Status</span>
