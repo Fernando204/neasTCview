@@ -389,7 +389,7 @@ function seriesLabel(room, sensor) {
     return `Sala ${room}` + (sensor == null ? '' : ` · Sensor ${sensor}`);
 }
 
-// Uma linha por sensor
+// Agrupa por sensor (a redução de pontos é feita depois, por trecho)
 function buildSeries(rows) {
     const groups = new Map();
 
@@ -410,8 +410,174 @@ function buildSeries(rows) {
             ...s,
             label: seriesLabel(s.room, s.sensor),
             color: SERIES_COLORS[s.key] || UNKNOWN_COLOR,
-            points: downsample(s.points.sort((p, q) => p.t - q.t), CHART_MAX_POINTS)
+            points: s.points.sort((p, q) => p.t - q.t)
         }));
+}
+
+/* ---------- buracos nos dados ---------- */
+
+const MIN = 60 * 1000;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
+
+const GAP_WIDTH = 22;       // largura (px) de um intervalo sem dados compactado
+const MIN_INTERVAL_W = 12;  // largura mínima (px) de um trecho com poucos dados
+
+// passos "redondos" para os rótulos do eixo X
+const TICK_STEPS = [1, 2, 5, 10, 15, 30].map(n => n * MIN)
+    .concat([1, 2, 3, 6, 12].map(n => n * HOUR))
+    .concat([1, 2, 7, 14].map(n => n * DAY));
+
+function median(values) {
+    if (values.length === 0) return 0;
+
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// Divide a série em trechos contínuos: um buraco maior que breakMs começa um novo trecho
+function splitSegments(points, breakMs) {
+    const segments = [];
+    let current = [];
+
+    points.forEach((p, i) => {
+        if (i > 0 && p.t - points[i - 1].t > breakMs) {
+            segments.push(current);
+            current = [];
+        }
+        current.push(p);
+    });
+
+    if (current.length) segments.push(current);
+
+    return segments;
+}
+
+function formatDuration(ms) {
+    const min = Math.max(1, Math.round(ms / MIN));
+
+    if (min < 60) return `${min} min`;
+
+    const h = Math.floor(min / 60);
+    if (h < 24) return min % 60 ? `${h} h ${min % 60} min` : `${h} h`;
+
+    const d = Math.floor(h / 24);
+    return h % 24 ? `${d} d ${h % 24} h` : `${d} d`;
+}
+
+// Monta o eixo X: os períodos com dados ocupam o espaço proporcional ao tempo
+// e os buracos grandes são compactados em uma faixa estreita.
+function buildTimeline(spans, breakMs, left, plotW) {
+    // une os trechos de todos os sensores
+    const sorted = [...spans].sort((a, b) => a.start - b.start);
+    const union = [];
+
+    sorted.forEach(s => {
+        const last = union[union.length - 1];
+        if (last && s.start - last.end <= breakMs) {
+            last.end = Math.max(last.end, s.end);
+        } else {
+            union.push({ start: s.start, end: s.end });
+        }
+    });
+
+    const totalSpan = union[union.length - 1].end - union[0].start;
+    const collapseMs = Math.max(breakMs * 3, totalSpan * 0.08);
+    const maxGaps = Math.max(0, Math.floor((plotW * 0.3) / GAP_WIDTH));
+
+    // só os maiores buracos são compactados (e no máximo maxGaps deles)
+    const collapsed = new Set(
+        union.slice(1)
+            .map((u, i) => ({ index: i + 1, size: u.start - union[i].end }))
+            .filter(g => g.size >= collapseMs)
+            .sort((a, b) => b.size - a.size)
+            .slice(0, maxGaps)
+            .map(g => g.index)
+    );
+
+    const intervals = [];
+    union.forEach((u, i) => {
+        if (i === 0 || collapsed.has(i)) {
+            intervals.push({ start: u.start, end: u.end });
+        } else {
+            intervals[intervals.length - 1].end = u.end;
+        }
+    });
+
+    // larguras: proporcional ao tempo, com um mínimo para trechos curtos
+    const avail = plotW - (intervals.length - 1) * GAP_WIDTH;
+    const totalDur = intervals.reduce((s, iv) => s + Math.max(iv.end - iv.start, 1), 0);
+
+    intervals.forEach(iv => {
+        iv.w = Math.max(MIN_INTERVAL_W, (avail * Math.max(iv.end - iv.start, 1)) / totalDur);
+    });
+
+    const widthSum = intervals.reduce((s, iv) => s + iv.w, 0);
+    if (widthSum > avail) {
+        const fixed = intervals.filter(iv => iv.w === MIN_INTERVAL_W);
+        const flexible = intervals.filter(iv => iv.w !== MIN_INTERVAL_W);
+        const flexSum = flexible.reduce((s, iv) => s + iv.w, 0);
+        const factor = flexSum > 0 ? Math.max(0, avail - fixed.length * MIN_INTERVAL_W) / flexSum : 1;
+
+        flexible.forEach(iv => { iv.w *= factor; });
+    }
+
+    let cursor = left;
+    const gaps = [];
+
+    intervals.forEach((iv, i) => {
+        iv.x0 = cursor;
+        iv.x1 = cursor + iv.w;
+        cursor = iv.x1;
+
+        if (i < intervals.length - 1) {
+            gaps.push({ x0: iv.x1, x1: iv.x1 + GAP_WIDTH, ms: intervals[i + 1].start - iv.end });
+            cursor += GAP_WIDTH;
+        }
+    });
+
+    const x = (t) => {
+        const iv = intervals.find(i => t <= i.end) || intervals[intervals.length - 1];
+
+        if (iv.end === iv.start) return (iv.x0 + iv.x1) / 2;
+
+        const tt = Math.min(Math.max(t, iv.start), iv.end);
+        return iv.x0 + ((tt - iv.start) / (iv.end - iv.start)) * iv.w;
+    };
+
+    return { intervals, gaps, x };
+}
+
+// Rótulos do eixo X, distribuídos dentro de cada período com dados
+function buildTicks(timeline, minSpacing) {
+    const ticks = [];
+
+    timeline.intervals.forEach(iv => {
+        const dur = iv.end - iv.start;
+        const want = Math.max(1, Math.floor(iv.w / 90));
+        const step = TICK_STEPS.find(s => s >= dur / want) || TICK_STEPS[TICK_STEPS.length - 1];
+
+        // alinha no horário local (ex.: 10:00, 10:30)
+        const offset = new Date(iv.start).getTimezoneOffset() * MIN;
+        const found = [];
+
+        for (let t = Math.ceil((iv.start - offset) / step) * step + offset; t <= iv.end; t += step) {
+            found.push(t);
+        }
+
+        if (found.length === 0) found.push(iv.start + dur / 2);
+
+        found.forEach(t => ticks.push({ t, step, x: timeline.x(t) }));
+    });
+
+    const kept = [];
+    ticks.sort((a, b) => a.x - b.x).forEach(tick => {
+        if (kept.length === 0 || tick.x - kept[kept.length - 1].x >= minSpacing) kept.push(tick);
+    });
+
+    return kept;
 }
 
 function niceTicks(min, max, count = 5) {
@@ -434,14 +600,6 @@ function niceTicks(min, max, count = 5) {
     }
 
     return ticks;
-}
-
-function formatTick(t, span) {
-    const d = new Date(t);
-
-    return span <= 36 * 60 * 60 * 1000
-        ? `${pad(d.getHours())}:${pad(d.getMinutes())}`
-        : `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 }
 
 function renderChart(rows) {
@@ -470,35 +628,77 @@ function renderChart(rows) {
         return;
     }
 
+    // --- 1. o que é um "buraco": depende do intervalo normal entre medições ---
+    const deltas = [];
+    series.forEach(s => {
+        for (let i = 1; i < s.points.length; i++) deltas.push(s.points[i].t - s.points[i - 1].t);
+    });
+
+    const typical = median(deltas) || MIN;
+    const breakMs = Math.max(typical * 5, 5 * MIN);
+
+    // --- 2. trechos contínuos de cada sensor ---
+    const spans = [];
+
+    series.forEach(s => {
+        s.segments = splitSegments(s.points, breakMs);
+        s.segments.forEach(seg => spans.push({ start: seg[0].t, end: seg[seg.length - 1].t }));
+    });
+
+    // --- 3. reduz a quantidade de pontos dentro de cada trecho ---
+    series.forEach(s => {
+        const total = s.points.length;
+
+        s.segments = s.segments.map(seg =>
+            downsample(seg, Math.max(2, Math.round((CHART_MAX_POINTS * seg.length) / total)))
+        );
+        s.flat = s.segments.flat();
+    });
+
     if (series.length > 1) {
         chartLegend.innerHTML = series
             .map(s => `<span style="--c:${s.color}">${s.label}</span>`)
             .join('');
     }
 
-    const all = series.flatMap(s => s.points);
-    const temps = all.map(p => p.v);
+    // --- 4. escalas ---
+    const temps = series.flatMap(s => s.flat.map(p => p.v));
     const ticksY = niceTicks(Math.min(...temps), Math.max(...temps));
     const y0 = ticksY[0];
     const y1 = ticksY[ticksY.length - 1];
 
-    let t0 = Math.min(...all.map(p => p.t));
-    let t1 = Math.max(...all.map(p => p.t));
-    if (t0 === t1) {
-        t0 -= 30 * 60 * 1000;
-        t1 += 30 * 60 * 1000;
-    }
-    const span = t1 - t0;
+    const firstT = Math.min(...spans.map(s => s.start));
+    const lastT = Math.max(...spans.map(s => s.end));
+    const multiDay = new Date(firstT).toDateString() !== new Date(lastT).toDateString();
 
     const W = Math.max(chartEl.clientWidth, 280);
     const H = 260;
-    const m = { l: 44, r: 16, t: 12, b: 28 };
+    const m = { l: 44, r: 20, t: 12, b: multiDay ? 42 : 28 };
     const plotW = W - m.l - m.r;
+    const yBase = H - m.b;
 
-    const x = (t) => m.l + ((t - t0) / span) * plotW;
-    const y = (v) => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.t - m.b);
+    const timeline = buildTimeline(spans, breakMs, m.l, plotW);
+    const x = timeline.x;
+    const y = (v) => yBase - ((v - y0) / (y1 - y0)) * (H - m.t - m.b);
 
+    if (timeline.gaps.length > 0) {
+        chartLegend.innerHTML += '<span class="gap-note">intervalo sem dados</span>';
+    }
+
+    series.forEach(s => {
+        s.flat.forEach(p => { p.x = x(p.t); p.y = y(p.v); });
+    });
+
+    // --- 5. desenho ---
     let svg = `<svg id="chart-svg" width="${W}" height="${H}" role="img" aria-label="Gráfico de temperatura">`;
+
+    svg += '<defs><pattern id="gap-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+        + '<line x1="0" y1="0" x2="0" y2="6" class="gap-hatch-line"/></pattern></defs>';
+
+    // faixas dos intervalos sem dados
+    timeline.gaps.forEach(g => {
+        svg += `<rect x="${g.x0}" y="${m.t}" width="${g.x1 - g.x0}" height="${yBase - m.t}" fill="url(#gap-hatch)"/>`;
+    });
 
     // linhas horizontais e valores do eixo Y
     ticksY.forEach(v => {
@@ -506,28 +706,58 @@ function renderChart(rows) {
         svg += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end" class="tick">${v}°</text>`;
     });
 
+    // marcas "//" no eixo X, onde o tempo foi compactado
+    timeline.gaps.forEach(g => {
+        const cx = (g.x0 + g.x1) / 2;
+        [-3, 3].forEach(dx => {
+            svg += `<line x1="${cx + dx - 2}" y1="${yBase + 4}" x2="${cx + dx + 2}" y2="${yBase - 4}" class="gap-mark"/>`;
+        });
+    });
+
     // valores do eixo X
-    for (let i = 0; i < 5; i++) {
-        const t = t0 + (span * i) / 4;
-        const anchor = i === 0 ? 'start' : i === 4 ? 'end' : 'middle';
-        svg += `<text x="${x(t)}" y="${H - 8}" text-anchor="${anchor}" class="tick">${formatTick(t, span)}</text>`;
-    }
+    buildTicks(timeline, multiDay ? 54 : 46).forEach(tick => {
+        const d = new Date(tick.t);
+        const date = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+        const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-    // linhas retas, sem suavização
-    series.forEach(s => {
-        const pts = s.points.map(p => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
-        svg += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="1.5" stroke-linejoin="round"/>`;
-
-        // poucos pontos: mostra cada medição
-        if (s.points.length <= 60) {
-            s.points.forEach(p => {
-                svg += `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.5" fill="${s.color}"/>`;
-            });
+        if (tick.step >= DAY) {
+            svg += `<text x="${tick.x}" y="${H - 8}" text-anchor="middle" class="tick">${date}</text>`;
+        } else {
+            svg += `<text x="${tick.x}" y="${yBase + 15}" text-anchor="middle" class="tick">${time}</text>`;
+            if (multiDay) {
+                svg += `<text x="${tick.x}" y="${yBase + 28}" text-anchor="middle" class="tick tick-date">${date}</text>`;
+            }
         }
     });
 
+    // linhas retas: uma por trecho contínuo (sem ligar os buracos)
+    series.forEach(s => {
+        const showDots = s.flat.length <= 60;
+
+        s.segments.forEach(seg => {
+            if (seg.length === 1) {
+                // trecho com uma única medição: só o ponto
+                svg += `<circle cx="${seg[0].x.toFixed(1)}" cy="${seg[0].y.toFixed(1)}" r="3" fill="${s.color}"/>`;
+                return;
+            }
+
+            const pts = seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+            const first = seg[0];
+            const last = seg[seg.length - 1];
+
+            svg += `<polygon points="${first.x.toFixed(1)},${yBase} ${pts} ${last.x.toFixed(1)},${yBase}" fill="${s.color}" fill-opacity="0.08"/>`;
+            svg += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="1.5" stroke-linejoin="round"/>`;
+
+            if (showDots) {
+                seg.forEach(p => {
+                    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="${s.color}"/>`;
+                });
+            }
+        });
+    });
+
     // elementos usados ao passar o mouse
-    svg += `<line id="chart-guide" y1="${m.t}" y2="${H - m.b}" class="guide" visibility="hidden"/>`;
+    svg += `<line id="chart-guide" y1="${m.t}" y2="${yBase}" class="guide" visibility="hidden"/>`;
     series.forEach((s, i) => {
         svg += `<circle id="chart-dot-${i}" r="4" fill="#fff" stroke="${s.color}" stroke-width="1.5" visibility="hidden"/>`;
     });
@@ -535,18 +765,28 @@ function renderChart(rows) {
 
     chartEl.innerHTML = svg;
 
-    // interação: valor mais próximo do cursor
+    // --- 6. interação ---
     const svgEl = document.getElementById('chart-svg');
     const tooltip = document.getElementById('chart-tooltip');
     const guide = document.getElementById('chart-guide');
 
-    const nearest = (points, t) =>
-        points.reduce((best, p) => (Math.abs(p.t - t) < Math.abs(best.t - t) ? p : best), points[0]);
+    const nearest = (points, px) =>
+        points.reduce((best, p) => (Math.abs(p.x - px) < Math.abs(best.x - px) ? p : best), points[0]);
+
+    const hideDots = () => {
+        guide.setAttribute('visibility', 'hidden');
+        series.forEach((s, i) => document.getElementById(`chart-dot-${i}`).setAttribute('visibility', 'hidden'));
+    };
 
     const hide = () => {
         tooltip.style.display = 'none';
-        guide.setAttribute('visibility', 'hidden');
-        series.forEach((s, i) => document.getElementById(`chart-dot-${i}`).setAttribute('visibility', 'hidden'));
+        hideDots();
+    };
+
+    const placeTooltip = (px) => {
+        const left = px + 10;
+        tooltip.style.left = `${left + tooltip.offsetWidth > W ? px - tooltip.offsetWidth - 10 : left}px`;
+        tooltip.style.top = `${m.t}px`;
     };
 
     svgEl.addEventListener('pointermove', (e) => {
@@ -557,29 +797,40 @@ function renderChart(rows) {
             return;
         }
 
-        const t = t0 + ((px - m.l) / plotW) * span;
-        const found = series.map(s => ({ s, p: nearest(s.points, t) }));
-        const best = found.reduce((a, b) => (Math.abs(a.p.t - t) < Math.abs(b.p.t - t) ? a : b));
+        // cursor sobre um intervalo compactado
+        const gap = timeline.gaps.find(g => px >= g.x0 && px <= g.x1);
+        if (gap) {
+            hideDots();
+            tooltip.innerHTML = `<strong>Sem dados</strong><br>por ${formatDuration(gap.ms)}`;
+            tooltip.style.display = 'block';
+            placeTooltip((gap.x0 + gap.x1) / 2);
+            return;
+        }
 
-        guide.setAttribute('x1', x(best.p.t));
-        guide.setAttribute('x2', x(best.p.t));
+        const found = series.map((s, i) => ({ s, i, p: nearest(s.flat, px) }));
+        const best = found.reduce((a, b) => (Math.abs(a.p.x - px) < Math.abs(b.p.x - px) ? a : b));
+
+        // só mostra os sensores que mediram perto desse mesmo momento
+        const shown = found.filter(f => Math.abs(f.p.t - best.p.t) <= breakMs);
+
+        hideDots();
+        guide.setAttribute('x1', best.p.x);
+        guide.setAttribute('x2', best.p.x);
         guide.setAttribute('visibility', 'visible');
 
-        found.forEach((f, i) => {
-            const dot = document.getElementById(`chart-dot-${i}`);
-            dot.setAttribute('cx', x(f.p.t));
-            dot.setAttribute('cy', y(f.p.v));
+        shown.forEach(f => {
+            const dot = document.getElementById(`chart-dot-${f.i}`);
+            dot.setAttribute('cx', f.p.x);
+            dot.setAttribute('cy', f.p.y);
             dot.setAttribute('visibility', 'visible');
         });
 
         tooltip.innerHTML =
             `<strong>${formatDate(best.p.t)}</strong>` +
-            found.map(f => `<br>${f.s.label}: ${f.p.v.toFixed(1)}°C`).join('');
+            shown.map(f => `<br>${f.s.label}: ${f.p.v.toFixed(1)}°C`).join('');
         tooltip.style.display = 'block';
 
-        const left = x(best.p.t) + 10;
-        tooltip.style.left = `${left + tooltip.offsetWidth > W ? x(best.p.t) - tooltip.offsetWidth - 10 : left}px`;
-        tooltip.style.top = `${m.t}px`;
+        placeTooltip(best.p.x);
     });
 
     svgEl.addEventListener('pointerleave', hide);

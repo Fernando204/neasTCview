@@ -433,6 +433,7 @@ button:hover {
 
 .chart-legend {
     display: flex;
+    flex-wrap: wrap;
     gap: 14px;
     font-size: 0.8rem;
     color: #444;
@@ -483,4 +484,25 @@ button:hover {
     line-height: 1.5;
     white-space: nowrap;
     pointer-events: none;
+}
+
+/* Intervalos sem dados no gráfico */
+.chart .gap-hatch-line {
+    stroke: #d5d9d5;
+    stroke-width: 2;
+}
+.chart .gap-mark {
+    stroke: #888;
+    stroke-width: 1.5;
+}
+.chart .tick-date {
+    fill: #999;
+    font-size: 10px;
+}
+.chart-legend .gap-note::before {
+    width: 12px;
+    height: 10px;
+    background: repeating-linear-gradient(45deg, #d5d9d5 0 2px, transparent 2px 5px);
+    border: 1px solid #d5d9d5;
+    box-sizing: border-box;
 }
